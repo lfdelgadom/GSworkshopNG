@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+
+<meta name="author" content="lfdelgadom" />
+
+<meta name="date" content="2022-03-24" />
+
+<title>Principal Components Analysis</title>
+
+<script src="site_libs/header-attrs-2.13/header-attrs.js"></script>
+<script src="site_libs/jquery-3.6.0/jquery-3.6.0.min.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link href="site_libs/bootstrap-3.3.5/css/cosmo.min.css" rel="stylesheet" />
+<script src="site_libs/bootstrap-3.3.5/js/bootstrap.min.js"></script>
+<script src="site_libs/bootstrap-3.3.5/shim/html5shiv.min.js"></script>
+<script src="site_libs/bootstrap-3.3.5/shim/respond.min.js"></script>
+<style>h1 {font-size: 34px;}
+       h1.title {font-size: 38px;}
+       h2 {font-size: 30px;}
+       h3 {font-size: 24px;}
+       h4 {font-size: 18px;}
+       h5 {font-size: 16px;}
+       h6 {font-size: 12px;}
+       code {color: inherit; background-color: rgba(0, 0, 0, 0.04);}
+       pre:not([class]) { background-color: white }</style>
+<script src="site_libs/jqueryui-1.11.4/jquery-ui.min.js"></script>
+<link href="site_libs/tocify-1.9.1/jquery.tocify.css" rel="stylesheet" />
+<script src="site_libs/tocify-1.9.1/jquery.tocify.js"></script>
+<script src="site_libs/navigation-1.1/tabsets.js"></script>
+<link href="site_libs/highlightjs-9.12.0/textmate.css" rel="stylesheet" />
+<script src="site_libs/highlightjs-9.12.0/highlight.js"></script>
+
+<link rel="icon" href="https://github.com/workflowr/workflowr-assets/raw/main/img/reproducible.png">
+<!-- Add a small amount of space between sections. -->
+<style type="text/css">
+div.section {
+  padding-top: 12px;
+}
+</style>
+
+
+
+<style type="text/css">
+  code{white-space: pre-wrap;}
+  span.smallcaps{font-variant: small-caps;}
+  span.underline{text-decoration: underline;}
+  div.column{display: inline-block; vertical-align: top; width: 50%;}
+  div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+  ul.task-list{list-style: none;}
+    </style>
+
+<style type="text/css">code{white-space: pre;}</style>
+<script type="text/javascript">
+if (window.hljs) {
+  hljs.configure({languages: []});
+  hljs.initHighlightingOnLoad();
+  if (document.readyState && document.readyState === "complete") {
+    window.setTimeout(function() { hljs.initHighlighting(); }, 0);
+  }
+}
+</script>
+
+
+
+
+
+
+
+
+
+<style type = "text/css">
+.main-container {
+  max-width: 940px;
+  margin-left: auto;
+  margin-right: auto;
+}
+img {
+  max-width:100%;
+}
+.tabbed-pane {
+  padding-top: 12px;
+}
+.html-widget {
+  margin-bottom: 20px;
+}
+button.code-folding-btn:focus {
+  outline: none;
+}
+summary {
+  display: list-item;
+}
+details > summary > p:only-child {
+  display: inline;
+}
+pre code {
+  padding: 0;
+}
+</style>
+
+
+<style type="text/css">
+.dropdown-submenu {
+  position: relative;
+}
+.dropdown-submenu>.dropdown-menu {
+  top: 0;
+  left: 100%;
+  margin-top: -6px;
+  margin-left: -1px;
+  border-radius: 0 6px 6px 6px;
+}
+.dropdown-submenu:hover>.dropdown-menu {
+  display: block;
+}
+.dropdown-submenu>a:after {
+  display: block;
+  content: " ";
+  float: right;
+  width: 0;
+  height: 0;
+  border-color: transparent;
+  border-style: solid;
+  border-width: 5px 0 5px 5px;
+  border-left-color: #cccccc;
+  margin-top: 5px;
+  margin-right: -10px;
+}
+.dropdown-submenu:hover>a:after {
+  border-left-color: #adb5bd;
+}
+.dropdown-submenu.pull-left {
+  float: none;
+}
+.dropdown-submenu.pull-left>.dropdown-menu {
+  left: -100%;
+  margin-left: 10px;
+  border-radius: 6px 0 6px 6px;
+}
+</style>
+
+<script type="text/javascript">
+// manage active state of menu based on current page
+$(document).ready(function () {
+  // active menu anchor
+  href = window.location.pathname
+  href = href.substr(href.lastIndexOf('/') + 1)
+  if (href === "")
+    href = "index.html";
+  var menuAnchor = $('a[href="' + href + '"]');
+
+  // mark it active
+  menuAnchor.tab('show');
+
+  // if it's got a parent navbar menu mark it active as well
+  menuAnchor.closest('li.dropdown').addClass('active');
+
+  // Navbar adjustments
+  var navHeight = $(".navbar").first().height() + 15;
+  var style = document.createElement('style');
+  var pt = "padding-top: " + navHeight + "px; ";
+  var mt = "margin-top: -" + navHeight + "px; ";
+  var css = "";
+  // offset scroll position for anchor links (for fixed navbar)
+  for (var i = 1; i <= 6; i++) {
+    css += ".section h" + i + "{ " + pt + mt + "}\n";
+  }
+  style.innerHTML = "body {" + pt + "padding-bottom: 40px; }\n" + css;
+  document.head.appendChild(style);
+});
+</script>
+
+<!-- tabsets -->
+
+<style type="text/css">
+.tabset-dropdown > .nav-tabs {
+  display: inline-table;
+  max-height: 500px;
+  min-height: 44px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.tabset-dropdown > .nav-tabs > li.active:before {
+  content: "";
+  font-family: 'Glyphicons Halflings';
+  display: inline-block;
+  padding: 10px;
+  border-right: 1px solid #ddd;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li.active:before {
+  content: "&#xe258;";
+  border: none;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open:before {
+  content: "";
+  font-family: 'Glyphicons Halflings';
+  display: inline-block;
+  padding: 10px;
+  border-right: 1px solid #ddd;
+}
+
+.tabset-dropdown > .nav-tabs > li.active {
+  display: block;
+}
+
+.tabset-dropdown > .nav-tabs > li > a,
+.tabset-dropdown > .nav-tabs > li > a:focus,
+.tabset-dropdown > .nav-tabs > li > a:hover {
+  border: none;
+  display: inline-block;
+  border-radius: 4px;
+  background-color: transparent;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li {
+  display: block;
+  float: none;
+}
+
+.tabset-dropdown > .nav-tabs > li {
+  display: none;
+}
+</style>
+
+<!-- code folding -->
+
+
+
+<style type="text/css">
+
+#TOC {
+  margin: 25px 0px 20px 0px;
+}
+@media (max-width: 768px) {
+#TOC {
+  position: relative;
+  width: 100%;
+}
+}
+
+@media print {
+.toc-content {
+  /* see https://github.com/w3c/csswg-drafts/issues/4434 */
+  float: right;
+}
+}
+
+.toc-content {
+  padding-left: 30px;
+  padding-right: 40px;
+}
+
+div.main-container {
+  max-width: 1200px;
+}
+
+div.tocify {
+  width: 20%;
+  max-width: 260px;
+  max-height: 85%;
+}
+
+@media (min-width: 768px) and (max-width: 991px) {
+  div.tocify {
+    width: 25%;
+  }
+}
+
+@media (max-width: 767px) {
+  div.tocify {
+    width: 100%;
+    max-width: none;
+  }
+}
+
+.tocify ul, .tocify li {
+  line-height: 20px;
+}
+
+.tocify-subheader .tocify-item {
+  font-size: 0.90em;
+}
+
+.tocify .list-group-item {
+  border-radius: 0px;
+}
+
+
+</style>
+
+
+
+</head>
+
+<body>
+
+
+<div class="container-fluid main-container">
+
+
+<!-- setup 3col/9col grid for toc_float and main content  -->
+<div class="row">
+<div class="col-xs-12 col-sm-4 col-md-3">
+<div id="TOC" class="tocify">
+</div>
+</div>
+
+<div class="toc-content col-xs-12 col-sm-8 col-md-9">
+
+
+
+
+<div class="navbar navbar-default  navbar-fixed-top" role="navigation">
+  <div class="container">
+    <div class="navbar-header">
+      <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-bs-toggle="collapse" data-target="#navbar" data-bs-target="#navbar">
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+      <a class="navbar-brand" href="index.html">GSworkshopNG</a>
+    </div>
+    <div id="navbar" class="navbar-collapse collapse">
+      <ul class="nav navbar-nav">
+        <li>
+  <a href="index.html">Home</a>
+</li>
+<li>
+  <a href="download.html">download</a>
+</li>
+<li>
+  <a href="PCA.html">Principal Components Analysis</a>
+</li>
+<li>
+  <a href="about.html">About</a>
+</li>
+<li>
+  <a href="license.html">License</a>
+</li>
+      </ul>
+      <ul class="nav navbar-nav navbar-right">
+        
+      </ul>
+    </div><!--/.nav-collapse -->
+  </div><!--/.container -->
+</div><!--/.navbar -->
+
+<div id="header">
+
+
+
+<h1 class="title toc-ignore">Principal Components Analysis</h1>
+<h4 class="author">lfdelgadom</h4>
+<h4 class="date">2022-03-24</h4>
+
+</div>
+
+
+<p>
+<button type="button" class="btn btn-default btn-workflowr btn-workflowr-report" data-toggle="collapse" data-target="#workflowr-report">
+<span class="glyphicon glyphicon-list" aria-hidden="true"></span> workflowr <span class="glyphicon glyphicon-exclamation-sign text-danger" aria-hidden="true"></span>
+</button>
+</p>
+<div id="workflowr-report" class="collapse">
+<ul class="nav nav-tabs">
+<li class="active">
+<a data-toggle="tab" href="#summary">Summary</a>
+</li>
+<li>
+<a data-toggle="tab" href="#checks"> Checks <span class="glyphicon glyphicon-exclamation-sign text-danger" aria-hidden="true"></span> </a>
+</li>
+<li>
+<a data-toggle="tab" href="#versions">Past versions</a>
+</li>
+</ul>
+<div class="tab-content">
+<div id="summary" class="tab-pane fade in active">
+<p>
+<strong>Last updated:</strong> 2022-03-24
+</p>
+<p>
+<strong>Checks:</strong> <span class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> 6 <span class="glyphicon glyphicon-exclamation-sign text-danger" aria-hidden="true"></span> 1
+</p>
+<p>
+<strong>Knit directory:</strong> <code>GSworkshopNG/</code> <span class="glyphicon glyphicon-question-sign" aria-hidden="true" title="This is the local directory in which the code in this file was executed."> </span>
+</p>
+<p>
+This reproducible <a href="https://rmarkdown.rstudio.com">R Markdown</a> analysis was created with <a
+  href="https://github.com/workflowr/workflowr">workflowr</a> (version 1.7.0). The <em>Checks</em> tab describes the reproducibility checks that were applied when the results were created. The <em>Past versions</em> tab lists the development history.
+</p>
+<hr>
+</div>
+<div id="checks" class="tab-pane fade">
+<div id="workflowr-checks" class="panel-group">
+<div class="panel panel-default">
+<div class="panel-heading">
+<p class="panel-title">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongRMarkdownfilestronguncommittedchanges"> <span class="glyphicon glyphicon-exclamation-sign text-danger" aria-hidden="true"></span> <strong>R Markdown file:</strong> uncommitted changes </a>
+</p>
+</div>
+<div id="strongRMarkdownfilestronguncommittedchanges" class="panel-collapse collapse">
+<div class="panel-body">
+<p>The R Markdown is untracked by Git. To know which version of the R Markdown file created these results, you’ll want to first commit it to the Git repo. If you’re still working on the analysis, you can ignore this warning. When you’re finished, you can run <code>wflow_publish</code> to commit the R Markdown file and build the HTML.</p>
+</div>
+</div>
+</div>
+<div class="panel panel-default">
+<div class="panel-heading">
+<p class="panel-title">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongEnvironmentstrongempty"> <span class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> <strong>Environment:</strong> empty </a>
+</p>
+</div>
+<div id="strongEnvironmentstrongempty" class="panel-collapse collapse">
+<div class="panel-body">
+<p>Great job! The global environment was empty. Objects defined in the global environment can affect the analysis in your R Markdown file in unknown ways. For reproduciblity it’s best to always run the code in an empty environment.</p>
+</div>
+</div>
+</div>
+<div class="panel panel-default">
+<div class="panel-heading">
+<p class="panel-title">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongSeedstrongcodesetseed20220324code"> <span class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> <strong>Seed:</strong> <code>set.seed(20220324)</code> </a>
+</p>
+</div>
+<div id="strongSeedstrongcodesetseed20220324code" class="panel-collapse collapse">
+<div class="panel-body">
+<p>The command <code>set.seed(20220324)</code> was run prior to running the code in the R Markdown file. Setting a seed ensures that any results that rely on randomness, e.g. subsampling or permutations, are reproducible.</p>
+</div>
+</div>
+</div>
+<div class="panel panel-default">
+<div class="panel-heading">
+<p class="panel-title">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongSessioninformationstrongrecorded"> <span class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> <strong>Session information:</strong> recorded </a>
+</p>
+</div>
+<div id="strongSessioninformationstrongrecorded" class="panel-collapse collapse">
+<div class="panel-body">
+<p>Great job! Recording the operating system, R version, and package versions is critical for reproducibility.</p>
+</div>
+</div>
+</div>
+<div class="panel panel-default">
+<div class="panel-heading">
+<p class="panel-title">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongCachestrongnone"> <span class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> <strong>Cache:</strong> none </a>
+</p>
+</div>
+<div id="strongCachestrongnone" class="panel-collapse collapse">
+<div class="panel-body">
+<p>Nice! There were no cached chunks for this analysis, so you can be confident that you successfully produced the results during this run.</p>
+</div>
+</div>
+</div>
+<div class="panel panel-default">
+<div class="panel-heading">
+<p class="panel-title">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongFilepathsstrongrelative"> <span class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> <strong>File paths:</strong> relative </a>
+</p>
+</div>
+<div id="strongFilepathsstrongrelative" class="panel-collapse collapse">
+<div class="panel-body">
+<p>Great job! Using relative paths to the files within your workflowr project makes it easier to run your code on other machines.</p>
+</div>
+</div>
+</div>
+<div class="panel panel-default">
+<div class="panel-heading">
+<p class="panel-title">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongRepositoryversionstrongahrefhttpsgithubcomlfdelgadomGSworkshopNGtree4d5597e8293c3ee7ad4648404024320f0f6b36a8targetblank4d5597ea"> <span class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> <strong>Repository version:</strong> <a href="https://github.com/lfdelgadom/GSworkshopNG/tree/4d5597e8293c3ee7ad4648404024320f0f6b36a8" target="_blank">4d5597e</a> </a>
+</p>
+</div>
+<div id="strongRepositoryversionstrongahrefhttpsgithubcomlfdelgadomGSworkshopNGtree4d5597e8293c3ee7ad4648404024320f0f6b36a8targetblank4d5597ea" class="panel-collapse collapse">
+<div class="panel-body">
+<p>
+Great! You are using Git for version control. Tracking code development and connecting the code version to the results is critical for reproducibility.
+</p>
+<p>
+The results in this page were generated with repository version <a href="https://github.com/lfdelgadom/GSworkshopNG/tree/4d5597e8293c3ee7ad4648404024320f0f6b36a8" target="_blank">4d5597e</a>. See the <em>Past versions</em> tab to see a history of the changes made to the R Markdown and HTML files.
+</p>
+<p>
+Note that you need to be careful to ensure that all relevant files for the analysis have been committed to Git prior to generating the results (you can use <code>wflow_publish</code> or <code>wflow_git_commit</code>). workflowr only checks the R Markdown file, but you know if there are other scripts or data files that it depends on. Below is the status of the Git repository when the results were generated:
+</p>
+<pre><code>
+Ignored files:
+    Ignored:    .Rproj.user/
+
+Untracked files:
+    Untracked:  analysis/PCA.Rmd
+
+Unstaged changes:
+    Modified:   analysis/_site.yml
+
+</code></pre>
+<p>
+Note that any generated files, e.g. HTML, png, CSS, etc., are not included in this status report because it is ok for generated content to have uncommitted changes.
+</p>
+</div>
+</div>
+</div>
+</div>
+<hr>
+</div>
+<div id="versions" class="tab-pane fade">
+<p>
+There are no past versions. Publish this analysis with <code>wflow_publish()</code> to start tracking its development.
+</p>
+<hr>
+</div>
+</div>
+</div>
+<div id="introduction" class="section level1">
+<h1>Introduction</h1>
+<div id="collecting-data" class="section level2">
+<h2>Collecting data</h2>
+<pre class="r"><code>data &lt;- iris</code></pre>
+</div>
+<div id="preparing-data-for-the-principal-components-analysis-pca" class="section level2">
+<h2>Preparing data for the principal components analysis (PCA)</h2>
+<p>Let’s prepare this prepare this data to plot some boxplot of all the four traits, for that you will need the function <code>melt</code> of the <code>reshape2</code> package and the tidyverse package. The reshape2 is an R package written by Hadley Wickham that makes it easy to transform data between wide and long formats.</p>
+<pre class="r"><code>library(reshape2); library(tidyverse)</code></pre>
+<pre><code>Warning: package &#39;reshape2&#39; was built under R version 4.1.2</code></pre>
+<pre><code>Warning: package &#39;tidyverse&#39; was built under R version 4.1.2</code></pre>
+<pre><code>-- Attaching packages --------------------------------------- tidyverse 1.3.1 --</code></pre>
+<pre><code>v ggplot2 3.3.5     v purrr   0.3.4
+v tibble  3.1.6     v dplyr   1.0.8
+v tidyr   1.2.0     v stringr 1.4.0
+v readr   2.1.2     v forcats 0.5.1</code></pre>
+<pre><code>Warning: package &#39;ggplot2&#39; was built under R version 4.1.2</code></pre>
+<pre><code>Warning: package &#39;tibble&#39; was built under R version 4.1.2</code></pre>
+<pre><code>Warning: package &#39;tidyr&#39; was built under R version 4.1.2</code></pre>
+<pre><code>Warning: package &#39;readr&#39; was built under R version 4.1.2</code></pre>
+<pre><code>Warning: package &#39;purrr&#39; was built under R version 4.1.2</code></pre>
+<pre><code>Warning: package &#39;dplyr&#39; was built under R version 4.1.2</code></pre>
+<pre><code>Warning: package &#39;stringr&#39; was built under R version 4.1.2</code></pre>
+<pre><code>Warning: package &#39;forcats&#39; was built under R version 4.1.2</code></pre>
+<pre><code>-- Conflicts ------------------------------------------ tidyverse_conflicts() --
+x dplyr::filter() masks stats::filter()
+x dplyr::lag()    masks stats::lag()</code></pre>
+<pre class="r"><code>dataMelted &lt;- data %&gt;% reshape2::melt(data = .,  # makes the same operation that makes 
+                                      id.vars = &quot;Species&quot;, # pivot_longer
+                                      variable.name = &quot;trait&quot;,
+                                      value.name = &quot;y&quot;)
+head(dataMelted)</code></pre>
+<pre><code>  Species        trait   y
+1  setosa Sepal.Length 5.1
+2  setosa Sepal.Length 4.9
+3  setosa Sepal.Length 4.7
+4  setosa Sepal.Length 4.6
+5  setosa Sepal.Length 5.0
+6  setosa Sepal.Length 5.4</code></pre>
+<p>Great!, now we have the data at the format to make boxplot from all traits at the same code line. so lets keep moving. For that we will use ggplot2 package.</p>
+<pre class="r"><code>dataMelted %&gt;% ggplot(aes(x = Species, y = y, fill = Species)) +
+     geom_boxplot() + facet_wrap(~trait, scales = &quot;free_y&quot;) +
+     theme_bw() +
+     theme(legend.position = &quot;none&quot;)</code></pre>
+<p><img src="figure/PCA.Rmd/unnamed-chunk-4-1.png" width="672" style="display: block; margin: auto;" /></p>
+<p>Great data, we can see a lot of differences between the Species for these traits. It seems that we may have some correlation between Petal Length and Width. We also have different amplitude for these traits this will certainly results in different phenotypic variance between the traits, so we need to scale these traits before the PCA.</p>
+<pre class="r"><code>DataSc &lt;- data %&gt;% select(-Species) %&gt;%
+     scale(x = ., center = TRUE, scale = TRUE) %&gt;%
+     as.data.frame() %&gt;% 
+     mutate(Species = data$Species)
+head(DataSc)</code></pre>
+<pre><code>  Sepal.Length Sepal.Width Petal.Length Petal.Width Species
+1   -0.8976739  1.01560199    -1.335752   -1.311052  setosa
+2   -1.1392005 -0.13153881    -1.335752   -1.311052  setosa
+3   -1.3807271  0.32731751    -1.392399   -1.311052  setosa
+4   -1.5014904  0.09788935    -1.279104   -1.311052  setosa
+5   -1.0184372  1.24503015    -1.335752   -1.311052  setosa
+6   -0.5353840  1.93331463    -1.165809   -1.048667  setosa</code></pre>
+</div>
+<div id="principal-component-analysis-pca" class="section level2">
+<h2>Principal Component Analysis (PCA)</h2>
+<p>So let’s proceed for the PCA analysis, here we will use the prcomp function from R status package, so no need to call any package.</p>
+<pre class="r"><code>PCA &lt;- prcomp(DataSc %&gt;% select(-Species))</code></pre>
+</div>
+<div id="saving-results" class="section level2">
+<h2>Saving results</h2>
+<p>Let’s save the important results in objects, so we could make some graphs with them.</p>
+<p><em>1. Accumulate percent of the total phenotypic variance explained by the principal components (PC)</em></p>
+<pre class="r"><code>Perc &lt;- 100 * PCA$sdev^2 / sum(PCA$sdev^2)
+
+PercAc &lt;- as.vector(rep(NA, times = length(Perc)))
+for(i in 1:length(Perc)) {
+  PercAc[i] &lt;- sum(Perc[1:i])
+  names(PercAc)[i] &lt;- i
+}
+names(PercAc) &lt;- c(&quot;PC1&quot;, &quot;PC2&quot;, &quot;PC3&quot;, &quot;PC4&quot;)
+PercAc</code></pre>
+<pre><code>      PC1       PC2       PC3       PC4 
+ 72.96245  95.81321  99.48213 100.00000 </code></pre>
+<p><em>2. Correlations of the traits with the principal components (PC)</em></p>
+<pre class="r"><code>CorTraits &lt;- PCA$rotation
+rownames(CorTraits) &lt;- c(&quot;SepLen&quot;, &quot;SepWid&quot;, &quot;PetLen&quot;, &quot;PetWid&quot;)
+CorTraits</code></pre>
+<pre><code>              PC1         PC2        PC3        PC4
+SepLen  0.5210659 -0.37741762  0.7195664  0.2612863
+SepWid -0.2693474 -0.92329566 -0.2443818 -0.1235096
+PetLen  0.5804131 -0.02449161 -0.1421264 -0.8014492
+PetWid  0.5648565 -0.06694199 -0.6342727  0.5235971</code></pre>
+<pre class="r"><code>LabelsPCA &lt;- CorTraits %&gt;% as.data.frame %&gt;%
+     mutate(PC1 = PC1 + 0.15, .keep = &quot;unused&quot;)</code></pre>
+<p><em>3. Individuals scores for the principal components (PC)</em></p>
+<pre class="r"><code>ScoresSpecies &lt;- PCA$x %&gt;%
+     as.data.frame %&gt;% 
+     mutate(Species = data$Species)
+
+head(ScoresSpecies)</code></pre>
+<pre><code>        PC1        PC2         PC3          PC4 Species
+1 -2.257141 -0.4784238  0.12727962  0.024087508  setosa
+2 -2.074013  0.6718827  0.23382552  0.102662845  setosa
+3 -2.356335  0.3407664 -0.04405390  0.028282305  setosa
+4 -2.291707  0.5953999 -0.09098530 -0.065735340  setosa
+5 -2.381863 -0.6446757 -0.01568565 -0.035802870  setosa
+6 -2.068701 -1.4842053 -0.02687825  0.006586116  setosa</code></pre>
+<p>Great we got what we need to create our figures.</p>
+</div>
+<div id="figures" class="section level2">
+<h2>Figures</h2>
+<p>The first figure will be a barplot of the accumulated variances explained by the PC. We will use the color red the PC selected to use at the next figures.</p>
+<p><img src="figure/PCA.Rmd/unnamed-chunk-11-1.png" width="672" style="display: block; margin: auto;" /></p>
+<p>R markdown allows us to hide the code that create the figure, this could be done adding the argument echo = FALSE inside the curly brackets at the chunk. Using echo argument will print just the result of you chunk, link below.</p>
+<p>The last figure will be a scatter plot of the individuals with their score for the first two PCs with the correlation of the traits with the first two PCs.</p>
+<pre class="r"><code>ggplot(data = ScoresSpecies, aes(x = PC1, y = PC2, color = Species)) +
+  geom_point() + geom_rug(alpha = 0.2, size = 1.5) +
+  geom_segment(mapping = aes(x = 0, xend = 3*PC1, y = 0, yend = 3*PC2),
+               colour = &quot;red&quot;,
+               data = CorTraits %&gt;% as.data.frame,
+               arrow = arrow(type = &quot;closed&quot;,
+                             length = unit(0.2,units = &quot;cm&quot;))) +
+  geom_text(mapping = aes(x = PC1*3, y = PC2*3, label = rownames(LabelsPCA)),
+            data = LabelsPCA, colour = &quot;black&quot;) + 
+  theme_bw() +
+  xlab(paste(&quot;PC1 - &quot;, round(Perc[1], digits = 2), &quot;%&quot;, sep = &quot;&quot;)) +
+     ylab(paste(&quot;PC2 - &quot;, round(Perc[2], digits = 2), &quot;%&quot;, sep = &quot;&quot;))</code></pre>
+<p><img src="figure/PCA.Rmd/unnamed-chunk-12-1.png" width="672" style="display: block; margin: auto;" /></p>
+<p>This is the final results of the PC. Mostly of the variance explained by the 1˚PC is due to the between species Setosa Vs Versicolor and Virginica. The 2˚PC just explain variance within the species. Also the traits Petal Length, Petal Width and Sepal Length could be used to discriminate the species.</p>
+<br>
+<p>
+<button type="button" class="btn btn-default btn-workflowr btn-workflowr-sessioninfo" data-toggle="collapse" data-target="#workflowr-sessioninfo" style="display: block;">
+<span class="glyphicon glyphicon-wrench" aria-hidden="true"></span> Session information
+</button>
+</p>
+<div id="workflowr-sessioninfo" class="collapse">
+<pre class="r"><code>sessionInfo()</code></pre>
+<pre><code>R version 4.1.1 (2021-08-10)
+Platform: x86_64-w64-mingw32/x64 (64-bit)
+Running under: Windows 10 x64 (build 19044)
+
+Matrix products: default
+
+locale:
+[1] LC_COLLATE=Spanish_Colombia.1252  LC_CTYPE=Spanish_Colombia.1252   
+[3] LC_MONETARY=Spanish_Colombia.1252 LC_NUMERIC=C                     
+[5] LC_TIME=Spanish_Colombia.1252    
+
+attached base packages:
+[1] stats     graphics  grDevices utils     datasets  methods   base     
+
+other attached packages:
+ [1] forcats_0.5.1   stringr_1.4.0   dplyr_1.0.8     purrr_0.3.4    
+ [5] readr_2.1.2     tidyr_1.2.0     tibble_3.1.6    ggplot2_3.3.5  
+ [9] tidyverse_1.3.1 reshape2_1.4.4 
+
+loaded via a namespace (and not attached):
+ [1] Rcpp_1.0.8       lubridate_1.8.0  assertthat_0.2.1 rprojroot_2.0.2 
+ [5] digest_0.6.29    utf8_1.2.2       R6_2.5.1         cellranger_1.1.0
+ [9] plyr_1.8.6       backports_1.4.1  reprex_2.0.1     evaluate_0.15   
+[13] highr_0.9        httr_1.4.2       pillar_1.7.0     rlang_1.0.1     
+[17] readxl_1.3.1     rstudioapi_0.13  jquerylib_0.1.4  rmarkdown_2.13  
+[21] labeling_0.4.2   munsell_0.5.0    broom_0.7.12     compiler_4.1.1  
+[25] httpuv_1.6.5     modelr_0.1.8     xfun_0.30        pkgconfig_2.0.3 
+[29] htmltools_0.5.2  tidyselect_1.1.2 workflowr_1.7.0  fansi_1.0.2     
+[33] crayon_1.5.0     tzdb_0.2.0       dbplyr_2.1.1     withr_2.5.0     
+[37] later_1.3.0      grid_4.1.1       jsonlite_1.8.0   gtable_0.3.0    
+[41] lifecycle_1.0.1  DBI_1.1.2        git2r_0.30.1     magrittr_2.0.2  
+[45] scales_1.1.1     cli_3.2.0        stringi_1.7.6    farver_2.1.0    
+[49] fs_1.5.2         promises_1.2.0.1 xml2_1.3.3       bslib_0.3.1     
+[53] ellipsis_0.3.2   generics_0.1.2   vctrs_0.3.8      tools_4.1.1     
+[57] glue_1.6.2       hms_1.1.1        fastmap_1.1.0    yaml_2.3.5      
+[61] colorspace_2.0-3 rvest_1.0.2      knitr_1.37       haven_2.4.3     
+[65] sass_0.4.0      </code></pre>
+</div>
+</div>
+</div>
+
+
+<!-- Adjust MathJax settings so that all math formulae are shown using
+TeX fonts only; see
+https://docs.mathjax.org/en/latest/web/configuration.html. This will make
+the presentation more consistent at the cost of the webpage sometimes
+taking slightly longer to load. Note that this only works because the
+footer is added to webpages before the MathJax javascript. -->
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config({
+    "HTML-CSS": { availableFonts: ["TeX"] }
+  });
+</script>
+
+
+
+
+</div>
+</div>
+
+</div>
+
+<script>
+
+// add bootstrap table styles to pandoc tables
+function bootstrapStylePandocTables() {
+  $('tr.odd').parent('tbody').parent('table').addClass('table table-condensed');
+}
+$(document).ready(function () {
+  bootstrapStylePandocTables();
+});
+
+
+</script>
+
+<!-- tabsets -->
+
+<script>
+$(document).ready(function () {
+  window.buildTabsets("TOC");
+});
+
+$(document).ready(function () {
+  $('.tabset-dropdown > .nav-tabs > li').click(function () {
+    $(this).parent().toggleClass('nav-tabs-open');
+  });
+});
+</script>
+
+<!-- code folding -->
+
+<script>
+$(document).ready(function ()  {
+
+    // temporarily add toc-ignore selector to headers for the consistency with Pandoc
+    $('.unlisted.unnumbered').addClass('toc-ignore')
+
+    // move toc-ignore selectors from section div to header
+    $('div.section.toc-ignore')
+        .removeClass('toc-ignore')
+        .children('h1,h2,h3,h4,h5').addClass('toc-ignore');
+
+    // establish options
+    var options = {
+      selectors: "h1,h2,h3",
+      theme: "bootstrap3",
+      context: '.toc-content',
+      hashGenerator: function (text) {
+        return text.replace(/[.\\/?&!#<>]/g, '').replace(/\s/g, '_');
+      },
+      ignoreSelector: ".toc-ignore",
+      scrollTo: 0
+    };
+    options.showAndHide = true;
+    options.smoothScroll = true;
+
+    // tocify
+    var toc = $("#TOC").tocify(options).data("toc-tocify");
+});
+</script>
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>
