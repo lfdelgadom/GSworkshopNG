@@ -1,5 +1,5 @@
 ---
-title: "Home"
+title: "Genomic selection training"
 site: workflowr::wflow_site
 output:
   workflowr::wflow_html:
@@ -8,4 +8,4 @@ editor_options:
   chunk_output_type: console
 ---
 
-Welcome to my research website.
+Welcome to my research website. This is my learning road in cassava genomic selection with: [Marin Wolfe](https://wolfemd.github.io/GenomicSelectionManual/index.html)
