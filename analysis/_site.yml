@@ -5,12 +5,12 @@ navbar:
   left:
   - text: Home
     href: index.html
+  - text: Prepare phenotype data
+    href: clean_phenos.html    
   - text: download
     href: download.html    
   - text: Principal Components Analysis
     href: PCA.html 
-  - text: Prepare phenotype data
-    href: clean_phenos.html    
   - text: About  
     href: about.html
   - text: License
