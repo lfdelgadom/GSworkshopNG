@@ -35,9 +35,8 @@ indata <- dplyr::left_join(indata,meta)
 indata %<>% # <- + %>% 
      dplyr::filter(observationLevel=="plot")
 
-
-
 dbdata <- indata
+
 ```
 
 ## Check experimental designs
@@ -172,6 +171,201 @@ dbdata %>%
 # Traits and Trait Abbreviations
 
 Cassavabase downloads use very long column-names corresponding to the [full trait-ontology name](https://cropontology.org/ontology/CO_334). For convenience, I replace these names with abbreviations, documented here. For eventual upload of analysis results, names will need to be restored to ontology terms.
+
+I also use this opportunity to subselect traits.
+
+```{r}
+traitabbrevs<-tribble(~TraitAbbrev,~TraitName,
+        "CMD1S","cassava.mosaic.disease.severity.1.month.evaluation.CO_334.0000191",
+        "CMD3S","cassava.mosaic.disease.severity.3.month.evaluation.CO_334.0000192",
+        "CMD6S","cassava.mosaic.disease.severity.6.month.evaluation.CO_334.0000194",
+        "DM","dry.matter.content.percentage.CO_334.0000092",
+        "RTWT","fresh.storage.root.weight.per.plot.CO_334.0000012",
+        "NOHAV","plant.stands.harvested.counting.CO_334.0000010")
+traitabbrevs %>% gt()#rmarkdown::paged_table()
+```
+
+
+
+```{r}
+dbdata<-renameAndSelectCols(traitabbrevs,
+                            indata=dbdata,
+                            customColsToKeep = c("observationUnitName",
+                                                 "CompleteBlocks",
+                                                 "IncompleteBlocks",
+                                                 "yearInLoc",
+                                                 "trialInLocYr",
+                                                 "repInTrial","blockInRep"))
+#> Joining, by = "TraitName"
+
+```
+
+# Dry matter boxplot
+
+```{r fig.align='center', fig.height=7, fig.width= 10}
+dbdata %>% ggplot(aes(reorder(x = studyName, DM), y = DM, fill = studyName))+
+  geom_boxplot(show.legend = F) +
+  geom_jitter(width = 0.2, show.legend = F, alpha = 0.2) +
+  labs(x = NULL) +
+  theme_light() +
+  theme(axis.text.x = element_text(hjust = 1 , angle = 90),
+        text = element_text(size = 15))
+  
+```
+
+# QC Trait Values
+
+At this point in the pipeline, we should check the all trait values are in allowable ranges. Different ways to approach this. Feel free to make some plots of your data!
+
+The database also has mechanisms to ensure trait values are only within allowable ranges.
+
+Nevertheless, as a habit, I have an simple ad hoc approach to this:
+
+```{r}
+# comment out the traits not present in this dataset
+dbdata<-dbdata %>% 
+     dplyr::mutate(CMD1S=ifelse(CMD1S<1 | CMD1S>5,NA,CMD1S),
+                   CMD3S=ifelse(CMD3S<1 | CMD3S>5,NA,CMD3S),
+                   # CMD6S=ifelse(CMD6S<1 | CMD6S>5,NA,CMD6S), 
+                   # CMD9S=ifelse(CMD9S<1 | CMD9S>5,NA,CMD9S),
+                   # CGM=ifelse(CGM<1 | CGM>5,NA,CGM),
+                   # CGMS1=ifelse(CGMS1<1 | CGMS1>5,NA,CGMS1),
+                   # CGMS2=ifelse(CGMS2<1 | CGMS2>5,NA,CGMS2),
+                   DM=ifelse(DM>100 | DM<=0,NA,DM),
+                   RTWT=ifelse(RTWT==0 | NOHAV==0 | is.na(NOHAV),NA,RTWT),
+                   # SHTWT=ifelse(SHTWT==0 | NOHAV==0 | is.na(NOHAV),NA,SHTWT),
+                   # RTNO=ifelse(RTNO==0 | NOHAV==0 | is.na(NOHAV),NA,RTNO),
+                   NOHAV=ifelse(NOHAV==0,NA,NOHAV),
+                   NOHAV=ifelse(NOHAV>42,NA,NOHAV)
+                   # RTNO=ifelse(!RTNO %in% 1:10000,NA,RTNO)
+     )
+```
+
+# Post-QC: composite traits
+
+Now that component traits are QC’d, it’s time to compute any composite traits.
+
+By composite traits, I mean traits computed from combinations of other traits.
+
+Examples for cassava: season-wide mean disease severity, harvest index, and fresh root yield.
+
+```{r}
+# [NEW AS OF APRIL 2021]
+## VERSION with vs. without CBSD
+## Impervious to particular timepoints between 1, 3, 6 and 9 scores
+
+# Without CBSD (West Africa)
+dbdata<-dbdata %>% 
+  mutate(MCMDS=rowMeans(.[,colnames(.) %in% c("CMD1S","CMD3S","CMD6S","CMD9S")], na.rm = T)) %>% 
+  select(-any_of(c("CMD1S","CMD3S","CMD6S","CMD9S")))
+
+# With CBSD (East Africa)
+# dbdata<-dbdata %>% 
+#   mutate(MCMDS=rowMeans(.[,colnames(.) %in% c("CMD1S","CMD3S","CMD6S","CMD9S")], na.rm = T),
+#          MCBSDS=rowMeans(.[,colnames(.) %in% c("CBSD1S","CBSD3S","CBSD6S","CBSD9S")], na.rm = T)) %>% 
+#   select(-any_of(c("CMD1S","CMD3S","CMD6S","CMD9S","CBSD1S","CBSD3S","CBSD6S","CBSD9S")))
+```
+
+# Fresh root yield (FYLD)
+
+**RTWT** (fresh root weight per plot in kg) –> **FYLD** (fresh root yield in tons per hectare)
+
+```{r}
+dbdata %>% 
+     count(studyYear,studyName,studyDesign,plotWidth,plotLength,plantsPerPlot) %>% 
+     mutate(plotArea=plotWidth*plotLength) %>% 
+     gt() %>% tab_options(table.font.size = pct(67))
+```
+In the example trial data, the plantsPerPlot meta-data field is empty. To my knowledge, no meta-data field is available in BreedBase to represent a net-plot harvest.
+
+**RECOMMEND INPUTING plantsPerPlot meta-data to cassavabase for your breeding program!**
+
+Firstly noting that the trial 19geneticgainUB actually does not have phenotypes (for any trait). It will be excluded downstream. (~~I might find a substitute genetic gain trial, from an earlier year, for the sake of this example~~)
+
+To decide what the real MaxHarvestedPlantsPerPlot and plantsPerPlot were likely to have been, I make two plots below and also compute the maximum NOHAV for each trial.
+
+```{r fig.align='center', fig.height=7, fig.width= 10}
+dbdata %>% 
+     ggplot(.,aes(x=NOHAV, fill=studyName)) + geom_density(alpha=0.75) +
+  facet_wrap(~studyName, scales = "free_x")
+```
+
+Maybe clearer to make a boxplot?
+
+```{r fig.align='center', fig.height=7, fig.width= 10}
+dbdata %>% 
+     # plot area in meters squared
+     mutate(plotArea=plotWidth*plotLength) %>% 
+     ggplot(.,aes(x=reorder(plotArea,NOHAV),y=NOHAV, fill=studyName)) + 
+     geom_boxplot()
+#> Warning: Removed 921 rows containing non-finite values
+#> (stat_boxplot).
+
+dbdata %>% 
+     # plot area in meters squared
+     mutate(plotArea=plotWidth*plotLength) %>% select(plotArea) %>% max()
+```
+
+
+```{r}
+plantsPerPlot_choices<-dbdata %>% 
+     distinct(studyYear,studyName,plotWidth,plotLength,plantsPerPlot) %>% 
+     left_join(dbdata %>% 
+                    group_by(studyName) %>% 
+                    summarize(MaxNOHAV=max(NOHAV, na.rm=T))) %>% 
+          # plot area in meters squared
+     mutate(plotArea=plotWidth*plotLength,
+            # Number of plants per plot
+            plantsPerPlot=MaxNOHAV,
+            plantsPerPlot=ifelse(studyName=="19.GS.C2.UYT.36.setA.UB",20,plantsPerPlot)) %>% 
+     # exclude the empty genetic gain trial
+     filter(studyName!="19geneticgainUB") %>% 
+     select(studyName,plotArea,MaxNOHAV,plantsPerPlot)
+
+plantsPerPlot_choices %>% gt() %>% tab_options(table.font.size = pct(67))
+```
+**As a data generator, in-house at each breeding program, no reason not to get the correct answer and repair the metadata on the database!**
+
+```{r fig.align='center', fig.height=7, fig.width= 10}
+dbdata %<>%
+     # remove the empty genetic gain trial
+     select(-plantsPerPlot) %>% 
+     # join plantsPerPlot_choices to the trial data
+     left_join(plantsPerPlot_choices) %>% 
+     # compute fresh root yield (FYLD) in tons per hectare
+     mutate(PlantSpacing=plotArea/plantsPerPlot,
+            FYLD=RTWT/(plantsPerPlot*PlantSpacing)*10) # FYLD (fresh root yield in tons per hectare)
+#> Joining, by = "studyName"
+dbdata %>% ggplot(.,aes(x=FYLD,fill=studyName)) + geom_density(alpha=0.75) +
+  facet_wrap(~studyName)
+```
+
+**Log-transform yield traits: this is a habit based on experience. Linear mixed-models should have normally distributed homoskedastic residuals, if they don’t log-transform the response variable often helps. For FYLD and related traits, I always log-transform.**
+
+```{r fig.align='center', fig.height=7, fig.width= 10}
+dbdata %<>% mutate(DYLD=FYLD*(DM/100), # DYLD (dry root yield in tons per hectare)
+            logFYLD=log(FYLD),
+            logDYLD=log(DYLD),
+            PropNOHAV=NOHAV/plantsPerPlot) 
+# remove non transformed / per-plot (instead of per area) traits
+dbdata %<>% select(-RTWT,-FYLD,-DYLD)
+dbdata %>% ggplot(.,aes(x=logFYLD,fill=studyName)) + geom_density(alpha=0.75) +
+  facet_wrap(~studyName)
+```
+
+Debatable whether this is better. Let’s not dwell on it. Onward!
+
+**SUGGESTION**: For individuals working this manual, consider making different, or no transformations as you see fit, with your own data. Even better, set-up a direct comparison of results with- vs. without-transformation.*
+
+# Save “cleaned” phenotypes
+
+```{r}
+saveRDS(dbdata,file=here::here("output","phenotypes_cleaned.rds"))
+```
+
+
+
+
 
 
 
