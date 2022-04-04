@@ -1,0 +1,181 @@
+---
+title: "Prepare phenotype data"
+author: "Luis Fdo Delgado"
+date: "2022-03-28"
+output: workflowr::wflow_html
+editor_options:
+  chunk_output_type: inline
+---
+
+```{r}
+library(tidyverse);
+library(genomicMateSelectR);
+library(magrittr)
+```
+
+
+## Read DB data
+
+
+```{r}
+indata <- read.csv(here::here("data","phenotype.csv"),
+                 na.strings = c("#VALUE!",NA,".",""," ","-","\""),
+                 stringsAsFactors = F, skip=3)
+
+meta <- read.csv(here::here("data","metadata.csv"),
+               na.strings = c("#VALUE!",NA,".",""," ","-","\""),
+               stringsAsFactors = F, skip=2)
+
+meta %<>%
+     dplyr::rename(programName = breedingProgramName,
+                   programDescription = breedingProgramDescription,
+                   programDbId = breedingProgramDbId)
+indata <- dplyr::left_join(indata,meta)
+
+indata %<>% # <- + %>% 
+     dplyr::filter(observationLevel=="plot")
+
+
+
+dbdata <- indata
+```
+
+## Check experimental designs
+
+Checklist: Are the data plot-basis, plant-basis or a mixture? If plant-basis data are present, should they be converted to plot-basis for further analysis?
+
+```{r}
+dbdata %>% count(observationLevel) # number of observation
+```
+*Checklist:* What experimental designs are present? How are they represented by the variables in the dataset? Are all designs consistent with your expectations, for example relative to the reported “trialType,” “studyName” and/or “studyDesign?”
+
+In this step, in the past, I have not been certain of the experimental designs of the trials I had downloaded. I was also not certain how the designs were represented in the column-names. For this reason, I developed an ad hoc custom code to “detect” the designs. I built the genomicMateSelectR function `detectExptDesigns()`
+
+```{r}
+library(gt)
+dbdata %>% 
+     count(studyName,trialType, studyDesign, numberBlocks,numberReps,entryType) %>% 
+     spread(entryType,n) %>% 
+     gt()  %>% 
+     tab_options(table.font.size = pct(75))
+```
+
+Summary table above shows:
+
+1. **trialType** and **studyDesign** cannot be 100% relied upon, at least not here.
+2. The only trial actually listed as having `studyDesign=="Augmented"` does not have “check” vs. “test” distinguished in the “entryType.”
+3. A `trialType=="Clonal Evaluation"` with `studyDesign=="RCBD"` but actually only 1 replication.
+
+Next, I’ll check if the **replicate** and **blockNumber** columns reliably distinguish complete and incomplete blocks in the data.
+
+
+```{r}
+dbdata %>% 
+     group_by(studyName) %>% 
+     summarize(N_replicate = length(unique(replicate)),
+               N_blockNumber = length(unique(blockNumber))) %>% 
+  gt() %>% tab_options(table.font.size = pct(75))
+```
+
+Here, I notice that except 1 trial (**19.GS.C1.C2.C3.AYT.42.UB**) has the same number of reps and blocks.
+
+The question is, are complete replications of the experiment indicated by **replicate** and incomplete sub-blocks represented by **blockNumber**
+
+```{r}
+dbdata %>% 
+     group_by(studyName) %>% 
+     summarize(N_replicate = length(unique(replicate)),
+               N_blockNumber = length(unique(blockNumber)),
+               doRepsEqualBlocks = all(replicate == blockNumber)) %>% 
+     gt() %>% tab_options(table.font.size = pct(75))
+
+```
+
+So for 1 trial, there are 3 complete blocks, no sub-blocks. For 6 trials, there are 2 complete replications and nested sub-blocks represented by the **blockNumber** variable. For 2 trials, there are only incomplete blocks.
+
+Next, I decided to check that the **replicate** column definitely means complete blocks. The below might look a bit complicated, but I basically merge two summaries: (1) he overall number of accessions per trial, and (2) the average number of accessions per replicate per trial.
+
+```{r}
+# the overall number of accessions per trial
+dbdata %>% 
+     group_by(studyName) %>% 
+     summarize(N_accession=length(unique(germplasmName))) %>% 
+     # the average number of accessions per replicate per trial
+     left_join(dbdata %>% 
+                    group_by(studyName,replicate) %>% 
+                    summarize(N_accession=length(unique(germplasmName))) %>% 
+                    group_by(studyName) %>% 
+                    summarize(avgAccessionsPerReplicate=ceiling(mean(N_accession)))) %>% # Ceiling function rounds a numeric input up to the next higher integer
+  group_by(studyName, N_accession, avgAccessionsPerReplicate) %>% summarize(doN_acceEqualave_acce = all(N_accession == avgAccessionsPerReplicate)) %>%
+  ungroup() %>% 
+  gt() %>% tab_options(table.font.size = pct(75))
+#> `summarise()` has grouped output by 'studyName'. You can override using the `.groups` argument.
+#> Joining, by = "studyName"
+```
+
+The numbers are very similar for all trials, indicating complete blocks.
+
+One more: look at the min, mean and max number of accessions per **blockNumber.**
+
+```{r}
+# the overall number of accessions per trial
+dbdata %>% 
+     group_by(studyName) %>% 
+     summarize(N_accession=length(unique(germplasmName))) %>% 
+     left_join(dbdata %>% 
+     group_by(studyName,replicate,blockNumber) %>% 
+     summarize(N_accession=length(unique(germplasmName))) %>% ungroup() %>% 
+     group_by(studyName) %>% 
+     summarize(minAccessionsPerBlock=ceiling(min(N_accession)),
+               avgAccessionsPerBlock=ceiling(mean(N_accession)),
+               maxAccessionsPerBlock=ceiling(max(N_accession)))) %>% 
+     gt() %>% tab_options(table.font.size = pct(70))
+#> `summarise()` has grouped output by 'studyName', 'replicate'. You can override using the `.groups` argument.
+#> Joining, by = "studyName"
+```
+
+From this, you can see that except for `studyName=="19.GS.C1.C2.C3.AYT.42.UB"` the sub-blocks represented by **blockNumber** have only subsets of the total number of accessions in the trial, as expected.
+
+Further, except for `studyName=="17geneticgainUB"` all trials have pretty consistently sized sub-blocks.
+
+Now I will ad hoc create two variables (CompleteBlocks and IncompleteBlocks), indicating (TRUE/FALSE) whether to model using the replicate and/or blockNumber variable.
+
+I also like to create explicitly nested design variables (**yearInLoc**, **trialInLocYr**, **repInTrial**, **blockInRep**).
+
+```{r}
+dbdata %<>%  
+     group_by(studyName) %>% 
+     summarize(N_replicate=length(unique(replicate)),
+               N_blockNumber=length(unique(blockNumber)),
+               doRepsEqualBlocks=all(replicate==blockNumber)) %>% 
+     ungroup() %>% 
+     mutate(CompleteBlocks=ifelse(N_replicate>1,TRUE,FALSE),
+            IncompleteBlocks=ifelse(N_blockNumber>1 & !doRepsEqualBlocks,TRUE,FALSE)) %>% 
+     left_join(dbdata) %>% 
+     mutate(yearInLoc=paste0(programName,"_",locationName,"_",studyYear),
+            trialInLocYr=paste0(yearInLoc,"_",studyName),
+            repInTrial=paste0(trialInLocYr,"_",replicate),
+            blockInRep=paste0(repInTrial,"_",blockNumber))
+```
+Just to check:
+
+```{r}
+dbdata %>% 
+     count(studyName,CompleteBlocks,IncompleteBlocks) %>% 
+     left_join(dbdata %>% 
+                    group_by(studyName) %>% 
+                    summarize(nRepInTrial=length(unique(repInTrial)),
+                              nBlockInRep=length(unique(blockInRep)))) %>% 
+     gt() %>% tab_options(table.font.size = pct(67))
+```
+
+# Traits and Trait Abbreviations
+
+Cassavabase downloads use very long column-names corresponding to the [full trait-ontology name](https://cropontology.org/ontology/CO_334). For convenience, I replace these names with abbreviations, documented here. For eventual upload of analysis results, names will need to be restored to ontology terms.
+
+
+
+
+
+
+
