@@ -48,15 +48,13 @@ dbdata %>% count(observationLevel) # number of observation
 ```
 *Checklist:* What experimental designs are present? How are they represented by the variables in the dataset? Are all designs consistent with your expectations, for example relative to the reported “trialType,” “studyName” and/or “studyDesign?”
 
-In this step, in the past, I have not been certain of the experimental designs of the trials I had downloaded. I was also not certain how the designs were represented in the column-names. For this reason, I developed an ad hoc custom code to “detect” the designs. I built the genomicMateSelectR function `detectExptDesigns()`
 
 ```{r}
 library(gt)
 dbdata %>% 
      count(studyName,trialType, studyDesign, numberBlocks,numberReps,entryType) %>% 
-     spread(entryType,n) %>% 
-     gt()  %>% 
-     tab_options(table.font.size = pct(75))
+     spread(entryType,n) 
+
 ```
 
 Summary table above shows:
@@ -71,9 +69,8 @@ Next, I’ll check if the **replicate** and **blockNumber** columns reliably dis
 ```{r}
 dbdata %>% 
      group_by(studyName) %>% 
-     summarize(N_replicate = length(unique(replicate)),
-               N_blockNumber = length(unique(blockNumber))) %>% 
-  gt() %>% tab_options(table.font.size = pct(75))
+     summarize(N_replicate=length(unique(replicate)),
+               N_blockNumber=length(unique(blockNumber)))
 ```
 
 Here, I notice that except 1 trial (**19.GS.C1.C2.C3.AYT.42.UB**) has the same number of reps and blocks.
@@ -83,10 +80,9 @@ The question is, are complete replications of the experiment indicated by **repl
 ```{r}
 dbdata %>% 
      group_by(studyName) %>% 
-     summarize(N_replicate = length(unique(replicate)),
-               N_blockNumber = length(unique(blockNumber)),
-               doRepsEqualBlocks = all(replicate == blockNumber)) %>% 
-     gt() %>% tab_options(table.font.size = pct(75))
+     summarize(N_replicate=length(unique(replicate)),
+               N_blockNumber=length(unique(blockNumber)),
+               doRepsEqualBlocks=all(replicate==blockNumber))
 
 ```
 
@@ -98,51 +94,66 @@ Next, I decided to check that the **replicate** column definitely means complete
 # the overall number of accessions per trial
 dbdata %>% 
      group_by(studyName) %>% 
-     summarize(N_accession=length(unique(germplasmName))) %>% 
-     # the average number of accessions per replicate per trial
-     left_join(dbdata %>% 
-                    group_by(studyName,replicate) %>% 
-                    summarize(N_accession=length(unique(germplasmName))) %>% 
-                    group_by(studyName) %>% 
-                    summarize(avgAccessionsPerReplicate=ceiling(mean(N_accession)))) %>% # Ceiling function rounds a numeric input up to the next higher integer
-  group_by(studyName, N_accession, avgAccessionsPerReplicate) %>% summarize(doN_acceEqualave_acce = all(N_accession == avgAccessionsPerReplicate)) %>%
-  ungroup() %>% 
-  gt() %>% tab_options(table.font.size = pct(75))
-#> `summarise()` has grouped output by 'studyName'. You can override using the `.groups` argument.
-#> Joining, by = "studyName"
+     summarize(N_accession=length(unique(germplasmName)))
 ```
 
-The numbers are very similar for all trials, indicating complete blocks.
-
-One more: look at the min, mean and max number of accessions per **blockNumber.**
+```{r}
+dbdata %>% 
+     group_by(studyName,replicate) %>% 
+     summarize(N_accession=length(unique(germplasmName))) %>% 
+     group_by(studyName) %>% 
+     summarize(avgAccessionsPerReplicate=ceiling(mean(N_accession)))
+```
 
 ```{r}
 # the overall number of accessions per trial
 dbdata %>% 
      group_by(studyName) %>% 
      summarize(N_accession=length(unique(germplasmName))) %>% 
+     # the average number of accessions per replicate per trial
      left_join(dbdata %>% 
+                    group_by(studyName,replicate) %>% 
+                    summarize(N_accession=length(unique(germplasmName))) %>% 
+                    group_by(studyName) %>% 
+                    summarize(avgAccessionsPerReplicate=ceiling(mean(N_accession))))
+```
+
+
+
+The numbers are very similar for all trials, indicating complete blocks.
+
+One more: look at the min, mean and max number of accessions per **blockNumber.**
+
+```{r}
+dbdata %>% 
      group_by(studyName,replicate,blockNumber) %>% 
      summarize(N_accession=length(unique(germplasmName))) %>% ungroup() %>% 
      group_by(studyName) %>% 
      summarize(minAccessionsPerBlock=ceiling(min(N_accession)),
                avgAccessionsPerBlock=ceiling(mean(N_accession)),
-               maxAccessionsPerBlock=ceiling(max(N_accession)))) %>% 
-     gt() %>% tab_options(table.font.size = pct(70))
-#> `summarise()` has grouped output by 'studyName', 'replicate'. You can override using the `.groups` argument.
-#> Joining, by = "studyName"
+               maxAccessionsPerBlock=ceiling(max(N_accession)))
 ```
 
-From this, you can see that except for `studyName=="19.GS.C1.C2.C3.AYT.42.UB"` the sub-blocks represented by **blockNumber** have only subsets of the total number of accessions in the trial, as expected.
-
-Further, except for `studyName=="17geneticgainUB"` all trials have pretty consistently sized sub-blocks.
+```{r}
+dbdata %>% 
+     group_by(studyName) %>% 
+     summarize(N_accession=length(unique(germplasmName))) %>% 
+     left_join(dbdata %>% 
+                    group_by(studyName,replicate,blockNumber) %>% 
+                    summarize(N_accession=length(unique(germplasmName))) %>% ungroup() %>% 
+                    group_by(studyName) %>% 
+                    summarize(minAccessionsPerBlock=ceiling(min(N_accession)),
+                              avgAccessionsPerBlock=ceiling(mean(N_accession)),
+                              maxAccessionsPerBlock=ceiling(max(N_accession))))
+```
+AYT trial does not have incomplete blocks… only complete blocks.
 
 Now I will ad hoc create two variables (CompleteBlocks and IncompleteBlocks), indicating (TRUE/FALSE) whether to model using the replicate and/or blockNumber variable.
 
-I also like to create explicitly nested design variables (**yearInLoc**, **trialInLocYr**, **repInTrial**, **blockInRep**).
+I also like to create explicitly nested design variables (yearInLoc, trialInLocYr, repInTrial, blockInRep).
 
 ```{r}
-dbdata %<>%  
+dbdata %<>% 
      group_by(studyName) %>% 
      summarize(N_replicate=length(unique(replicate)),
                N_blockNumber=length(unique(blockNumber)),
@@ -164,8 +175,7 @@ dbdata %>%
      left_join(dbdata %>% 
                     group_by(studyName) %>% 
                     summarize(nRepInTrial=length(unique(repInTrial)),
-                              nBlockInRep=length(unique(blockInRep)))) %>% 
-     gt() %>% tab_options(table.font.size = pct(67))
+                              nBlockInRep=length(unique(blockInRep))))
 ```
 
 # Traits and Trait Abbreviations
@@ -182,13 +192,13 @@ traitabbrevs<-tribble(~TraitAbbrev,~TraitName,
         "DM","dry.matter.content.percentage.CO_334.0000092",
         "RTWT","fresh.storage.root.weight.per.plot.CO_334.0000012",
         "NOHAV","plant.stands.harvested.counting.CO_334.0000010")
-traitabbrevs %>% gt()#rmarkdown::paged_table()
+#rmarkdown::paged_table()
 ```
 
 
 
 ```{r}
-dbdata<-renameAndSelectCols(traitabbrevs,
+dbdata <- renameAndSelectCols(traitabbrevs,
                             indata=dbdata,
                             customColsToKeep = c("observationUnitName",
                                                  "CompleteBlocks",
@@ -286,8 +296,7 @@ To decide what the real MaxHarvestedPlantsPerPlot and plantsPerPlot were likely 
 
 ```{r fig.align='center', fig.height=7, fig.width= 10}
 dbdata %>% 
-     ggplot(.,aes(x=NOHAV, fill=studyName)) + geom_density(alpha=0.75) +
-  facet_wrap(~studyName, scales = "free_x")
+     ggplot(.,aes(x=NOHAV, fill=studyName)) + geom_density(alpha=0.75)
 ```
 
 Maybe clearer to make a boxplot?
@@ -296,8 +305,8 @@ Maybe clearer to make a boxplot?
 dbdata %>% 
      # plot area in meters squared
      mutate(plotArea=plotWidth*plotLength) %>% 
-     ggplot(.,aes(x=reorder(plotArea,NOHAV),y=NOHAV, fill=studyName)) + 
-     geom_boxplot()
+     ggplot(.,aes(x=plotArea,y=NOHAV, fill=studyName)) + 
+     geom_boxplot() + theme(axis.text.x = element_blank())
 #> Warning: Removed 921 rows containing non-finite values
 #> (stat_boxplot).
 
@@ -308,7 +317,7 @@ dbdata %>%
 
 
 ```{r}
-plantsPerPlot_choices<-dbdata %>% 
+plantsPerPlot_choices <- dbdata %>% 
      distinct(studyYear,studyName,plotWidth,plotLength,plantsPerPlot) %>% 
      left_join(dbdata %>% 
                     group_by(studyName) %>% 
@@ -322,22 +331,21 @@ plantsPerPlot_choices<-dbdata %>%
      filter(studyName!="19geneticgainUB") %>% 
      select(studyName,plotArea,MaxNOHAV,plantsPerPlot)
 
-plantsPerPlot_choices %>% gt() %>% tab_options(table.font.size = pct(67))
+plantsPerPlot_choices 
 ```
 **As a data generator, in-house at each breeding program, no reason not to get the correct answer and repair the metadata on the database!**
 
 ```{r fig.align='center', fig.height=7, fig.width= 10}
 dbdata %<>%
-     # remove the empty genetic gain trial
      select(-plantsPerPlot) %>% 
      # join plantsPerPlot_choices to the trial data
      left_join(plantsPerPlot_choices) %>% 
      # compute fresh root yield (FYLD) in tons per hectare
      mutate(PlantSpacing=plotArea/plantsPerPlot,
             FYLD=RTWT/(plantsPerPlot*PlantSpacing)*10) # FYLD (fresh root yield in tons per hectare)
-#> Joining, by = "studyName"
-dbdata %>% ggplot(.,aes(x=FYLD,fill=studyName)) + geom_density(alpha=0.75) +
-  facet_wrap(~studyName)
+
+
+dbdata %>% ggplot(.,aes(x=FYLD,fill=studyName)) + geom_density(alpha=0.75) 
 ```
 
 **Log-transform yield traits: this is a habit based on experience. Linear mixed-models should have normally distributed homoskedastic residuals, if they don’t log-transform the response variable often helps. For FYLD and related traits, I always log-transform.**
@@ -349,8 +357,7 @@ dbdata %<>% mutate(DYLD=FYLD*(DM/100), # DYLD (dry root yield in tons per hectar
             PropNOHAV=NOHAV/plantsPerPlot) 
 # remove non transformed / per-plot (instead of per area) traits
 dbdata %<>% select(-RTWT,-FYLD,-DYLD)
-dbdata %>% ggplot(.,aes(x=logFYLD,fill=studyName)) + geom_density(alpha=0.75) +
-  facet_wrap(~studyName)
+dbdata %>% ggplot(.,aes(x=logFYLD,fill=studyName)) + geom_density(alpha=0.75) 
 ```
 
 Debatable whether this is better. Let’s not dwell on it. Onward!

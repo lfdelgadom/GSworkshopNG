@@ -1,145 +1,42 @@
 ---
-title: "Principal Components Analysis"
+title: "Get BLUPS"
 author: "lfdelgadom"
 date: "2022-03-24"
 output: workflowr::wflow_html
 editor_options:
-  chunk_output_type: console
+  chunk_output_type: inline
 ---
 
-# Introduction
-
-## Collecting data
+# Load de packages
 
 ```{r}
-data <- iris
-
+suppressMessages(library(tidyverse)); 
+suppressMessages(library(genomicMateSelectR)); 
+suppressMessages(library(sommer));
 ```
 
-## Preparing data for the principal components analysis (PCA)
-
-Let’s prepare this prepare this data to plot some boxplot of all the four traits, for that you will need the function `melt` of the `reshape2` package and the tidyverse package. The reshape2 is an R package written by Hadley Wickham that makes it easy to transform data between wide and long formats.
+# Set up the training data
 
 ```{r}
-library(reshape2); library(tidyverse)
+phenos<-readRDS(here::here("output","phenotypes_cleaned.rds"))
 ```
-
-```{r}
-dataMelted <- data %>% reshape2::melt(data = .,  # makes the same operation that makes 
-                                      id.vars = "Species", # pivot_longer
-                                      variable.name = "trait",
-                                      value.name = "y")
-head(dataMelted)
-```
-
-
-Great!, now we have the data at the format to make boxplot from all traits at the same code line. so lets keep moving. For that we will use ggplot2 package.
-
-```{r}
-dataMelted %>% ggplot(aes(x = Species, y = y, fill = Species)) +
-     geom_boxplot() + facet_wrap(~trait, scales = "free_y") +
-     theme_bw() +
-     theme(legend.position = "none")
-```
-
-Great data, we can see a lot of differences between the Species for these traits. It seems that we may have some correlation between Petal Length and Width. We also have different amplitude for these traits this will certainly results in different phenotypic variance between the traits, so we need to scale these traits before the PCA.
 
 
 ```{r}
-DataSc <- data %>% select(-Species) %>%
-     scale(x = ., center = TRUE, scale = TRUE) %>%
-     as.data.frame() %>% 
-     mutate(Species = data$Species)
-head(DataSc)
-```
-
-## Principal Component Analysis (PCA)
-
-So let’s proceed for the PCA analysis, here we will use the prcomp function from R status package, so no need to call any package.
-
-```{r}
-PCA <- prcomp(DataSc %>% select(-Species))
-```
-
-## Saving results
-
-Let’s save the important results in objects, so we could make some graphs with them.
-
-_1. Accumulate percent of the total phenotypic variance explained by the principal components (PC)_
-
-```{r}
-Perc <- 100 * PCA$sdev^2 / sum(PCA$sdev^2)
-
-PercAc <- as.vector(rep(NA, times = length(Perc)))
-for(i in 1:length(Perc)) {
-  PercAc[i] <- sum(Perc[1:i])
-  names(PercAc)[i] <- i
-}
-names(PercAc) <- c("PC1", "PC2", "PC3", "PC4")
-PercAc
-```
-
-_2. Correlations of the traits with the principal components (PC)_
-
-```{r}
-CorTraits <- PCA$rotation
-rownames(CorTraits) <- c("SepLen", "SepWid", "PetLen", "PetWid")
-CorTraits
+phenos %>% 
+     count(CompleteBlocks,IncompleteBlocks,locationName) %>% 
+     spread(locationName,n)
 ```
 
 ```{r}
-LabelsPCA <- CorTraits %>% as.data.frame %>%
-     mutate(PC1 = PC1 + 0.15, .keep = "unused")
+traits<-c("DM","MCMDS","logFYLD","logDYLD")
+phenos<-phenos %>% 
+     # Convert the data to "long format" 
+     pivot_longer(cols = all_of(traits), 
+                  names_to = "Trait", values_to = "Value") %>% 
+# Remove missing values
+     filter(!is.na(Value)) %>% 
+  nest(METdata=c(-Trait))
 ```
-
-_3. Individuals scores for the principal components (PC)_
-
-```{r}
-ScoresSpecies <- PCA$x %>%
-     as.data.frame %>% 
-     mutate(Species = data$Species)
-
-head(ScoresSpecies)
-```
-
-Great we got what we need to create our figures.
-
-## Figures
-
-The first figure will be a barplot of the accumulated variances explained by the PC. We will use the color red the PC selected to use at the next figures.
-
-```{r echo=F}
-barplot(PercAc, main = "Variance explained by PCA",
-        ylab = "Cumulative variance (%)", xlab = "Number of retained PCs",
-        col = c("red", "red", "gray", "gray", "gray"))
-```
-
-R markdown allows us to hide the code that create the figure, this could be done adding the argument echo = FALSE inside the curly brackets at the chunk. Using echo argument will print just the result of you chunk, link below.
-
-The last figure will be a scatter plot of the individuals with their score for the first two PCs with the correlation of the traits with the first two PCs.
-
-```{r}
-ggplot(data = ScoresSpecies, aes(x = PC1, y = PC2, color = Species)) +
-  geom_point() + geom_rug(alpha = 0.2, size = 1.5) +
-  geom_segment(mapping = aes(x = 0, xend = 3*PC1, y = 0, yend = 3*PC2),
-               colour = "red",
-               data = CorTraits %>% as.data.frame,
-               arrow = arrow(type = "closed",
-                             length = unit(0.2,units = "cm"))) +
-  geom_text(mapping = aes(x = PC1*3, y = PC2*3, label = rownames(LabelsPCA)),
-            data = LabelsPCA, colour = "black") + 
-  theme_bw() +
-  xlab(paste("PC1 - ", round(Perc[1], digits = 2), "%", sep = "")) +
-     ylab(paste("PC2 - ", round(Perc[2], digits = 2), "%", sep = ""))
-```
-
-This is the final results of the PC. Mostly of the variance explained by the 1˚PC is due to the between species Setosa Vs Versicolor and Virginica. The 2˚PC just explain variance within the species. Also the traits Petal Length, Petal Width and Sepal Length could be used to discriminate the species.
-
-
-
-
-
-
-
 
 
